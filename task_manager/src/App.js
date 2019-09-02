@@ -1,10 +1,7 @@
-import React, {useEffect, useState, Fragment, Component} from 'react';
+import React, {Component} from 'react';
 import './App.css';
 import db from './store/DB'
 import user from './store/userDB'
-// import {createNewTask, getAllTask, updateTask, deleteTask, resetState} from './store/action'
-// import {connect} from 'react-redux'
-// import {Input, Form, Button} from 'semantic-ui-react'
 
 class App extends Component {
   state = {
@@ -12,11 +9,19 @@ class App extends Component {
     tags : [],
     tags_input : '',
     isInitialized: false,
+    idEdit : null
   }
 
   render() {
     if (!this.state.isInitialized) {
       return null;
+    }
+    let style = {
+      data : {
+        borderColor: 'black',
+        textAlign: 'left',
+        padding: 8
+      }
     }
     return (
       <div>
@@ -26,32 +31,53 @@ class App extends Component {
           </button>
         </h2>
         <pre>
-          last upload: {db.dataMeta.tsUpload}
+          last upload: {JSON.stringify(new Date(db.dataMeta.tsUpload).toLocaleString())}
         </pre>
-        {
-          db.data.map((todo, index) => (
-            <p key={todo._id}>
-              {index + 1}. {todo.task_content}, {JSON.stringify(todo.tags)}
-              {
-                !db.checkIsUploaded(todo) && (
-                  ` (belum upload)`
-                )
-              }
-              {` `}
-              <button onClick={() => this.deleteTodo(todo._id)}>
-                X
-              </button>
-            </p>
-          ))
-        }
+        <table style={{borderCollapse: 'collapse', width: '100%'}}>
+          <tbody>
+            <tr>
+              <th style={style.data}>No.</th>
+              <th style={style.data}>Task</th>
+              <th style={style.data}>Tags</th>
+              <th style={style.data}>status</th>
+              <th style={style.data}>action</th>
+            </tr>
+            
+            {
+              db.data.map((todo, index) => (
+                <tr key={todo._id}>
+                  <td>{index + 1}</td>
+                  <td>{todo.task_content}</td>
+                  <td>{todo.tags.join(', ')}</td>
+                  <td>{!db.checkIsUploaded(todo) ? (` ( pending ) `) : (` ( uploaded ) `)}</td>
+                  <td>
+                    {
+                      !todo.complete ? (<><button style={{color:'green'}} onClick={() => this.completeTodo(todo)}>DONE</button> | </>) : (<><button style={{color:'green'}} disabled>COMPLETED</button> | </>)
+                    }
+                  <button onClick={() => this.updateTodo(todo)} style={{color:'blue'}}>EDIT</button> | <button onClick={() => this.deleteTodo(todo._id)} style={{color:'red'}}>DELETE</button>
+                  </td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
 
         <h2>add new todo</h2>
-        <form onSubmit={this.addTodo}>
-          <p><input type='text' value={this.state.task_content} onChange={this.type_task_content} /></p>
-          <p><input type='text' value={this.state.tags_input} onChange={this.add_task_tag} /></p>
-          <p>{JSON.stringify(this.state.tags)}</p>
-          <p><button>submit</button></p>
-        </form>
+        {/* <form> */}
+          <p>TODO : <input placeholder="Input todo task" type='text' value={this.state.task_content} onChange={this.type_task_content} /></p>
+          <p> TAGS : <input placeholder="Separate tags by ',' (comma) or ' ' (space)" type='text' value={this.state.tags_input} style={{width:300}} onChange={this.add_task_tag} /> {
+            this.state.tags.map((tag, i) => {
+              return (
+                <button key={i} onClick={() => {this.delete_single_tag(tag)}} style={{color:'red'}}>{tag}</button>
+              )
+            })
+          } 
+          {
+            this.state.tags.length > 0 && <small>click to delete</small>
+          } </p>
+          <p></p>
+          <p><button onClick={() => this.addTodo()}>submit</button></p>
+        {/* </form> */}
       </div>
     );
   }
@@ -70,10 +96,31 @@ class App extends Component {
     this.unsubTodos();
   }
 
+  updateTodo = (todo) => {
+    this.setState({
+      task_content : todo.task_content,
+      tags : todo.tags,
+      idEdit : todo._id
+    })
+  }
+
+  completeTodo = async (todo) => {
+    await db.editItem(todo._id, {complete : true}, user.data)
+  }
+
   type_task_content = (event) => {
     this.setState({
       task_content: event.target.value,
     });
+  }
+
+  delete_single_tag = (input) => {
+    console.log(input)
+    this.setState({
+      tags : this.state.tags.filter(tag => {
+        if(!tag.includes(input)) return tag
+      })
+    })
   }
 
   add_task_tag = (event) => {
@@ -82,32 +129,42 @@ class App extends Component {
       tags_input : event.target.value
     }, () => {
       let text = this.state.tags_input
-      if(text[text.length-1] === ',' || text[text.length-1] === ' ' ){
-
+      if((text[text.length-1] === ',' || text[text.length-1] === ' ') && text.length > 1){
         this.setState({
           tags : this.state.tags.includes(text.slice(0,text.length-1)) ? this.state.tags : this.state.tags.concat([text.slice(0,text.length-1)]),
           tags_input : ''
+        }, () => {
+          console.log(this.state.tags);
         })
       }
     })
   }
 
   addTodo = async (event) => {
-    event.preventDefault();
-    await db.addItem({
-      task_content: this.state.task_content,
-      tags : this.state.tags,
-      created_date : new Date()
-    }, user.data);
+    // event.preventDefault();
+    if(!this.state.idEdit){
+      await db.addItem({
+        task_content: this.state.task_content,
+        tags : this.state.tags,
+        created_date : new Date(),
+        complete : false
+      }, user.data);
+    } else {
+      console.log(this.state.tags, '============');
+      await db.editItem(this.state.idEdit, {
+        task_content: this.state.task_content,
+        tags : this.state.tags
+      }, user.data )
+    }
     this.setState({ 
-      task_content: '', 
+      task_content: '',
       tags : [],
       tags_input : ''
     });
   }
 
   deleteTodo = async (id) => {
-    db.deleteItem(id, user.data);
+    await db.deleteItem(id, user.data);
   }
 
   upload = async () => {
