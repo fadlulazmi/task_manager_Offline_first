@@ -1,101 +1,133 @@
-import React, {useEffect, useState, Fragment} from 'react';
+import React, {useEffect, useState, Fragment, Component} from 'react';
 import './App.css';
 import db from './store/DB'
 import user from './store/userDB'
-import {createNewTask, getAllTask, updateTask, deleteTask} from './store/action'
-import {connect} from 'react-redux'
-import {Input, Form, Button} from 'semantic-ui-react'
+// import {createNewTask, getAllTask, updateTask, deleteTask, resetState} from './store/action'
+// import {connect} from 'react-redux'
+// import {Input, Form, Button} from 'semantic-ui-react'
 
-const mapStateToProps = state => {
-  return {
-    ...state
+class App extends Component {
+  state = {
+    task_content: '',
+    tags : [],
+    tags_input : '',
+    isInitialized: false,
   }
-}
 
-const mapDispatchToProps = {
-  createNewTask,
-  getAllTask,
-  updateTask,
-  deleteTask
-}
-
-function App(props) {
-
-  const [task, setTask] = useState(null)
-  const [tags, setTags] = useState(null)
-  const [allTasks, setAllTasks] = useState(props.tasks)
-
-  const initDB = async () => {
-    if (!db.isInitialized) {
-      db.setName('my_task');	// to set databasename for model
-      await db.initialize(); // to initialize database locally by getting synced
+  render() {
+    if (!this.state.isInitialized) {
+      return null;
     }
-  }
-
-  useEffect(() => {
-    initDB()
-  }, [])
-
-  
-  useEffect(() => {
-    if(!allTasks) props.getAllTask()
-    console.log(allTasks, '===========')
-  }, [allTasks])
-  
-  const type_task = (task) => {
-    setTask(task)
-    // console.log(task)
-  }
-
-  const type_tags = (tags) => {
-    setTags(tags)
-    // console.log(tags)
-  }
-
-  const submit_new_task = async () => {
-    if(tags && task){
-      await props.createNewTask({
-        task_content : task,
-        tags,
-        created_date : new Date()
-      }, user.data)
-
-      // await props.createNewTask()
-
-      setAllTasks(null)
-      props.getAllTask()
-
-    }
-  }
-
-  return (
-    <Fragment>
-      <Form onSubmit={() => submit_new_task()}>
-        <Input placeholder={'Input New Task ...'} onChange={(_,text) => type_task(text.value)}/>
-        <Input
-          icon='tags'
-          iconPosition='left'
-          label={{ tag: true, content: 'Add Tag' }}
-          labelPosition='right'
-          placeholder='Enter tags'
-          onChange={(_,tags) => type_tags(tags.value)}
-        />
-        <br/>
-        <Button type="submit">Click Here</Button>
-        <br/>
+    return (
+      <div>
+        <h2>
+          todos: <button onClick={this.upload}>
+            {`upload (${db.countUnuploadeds()})`}
+          </button>
+        </h2>
+        <pre>
+          last upload: {db.dataMeta.tsUpload}
+        </pre>
         {
-          allTasks ? allTasks.map(task => {
-            return (
-              <>
-                <p>{JSON.stringify(task, null, 2)}</p>
-                <br/>
-              </>
-            )
-          }) : <p>loading...</p>
+          db.data.map((todo, index) => (
+            <p key={todo._id}>
+              {index + 1}. {todo.task_content}, {JSON.stringify(todo.tags)}
+              {
+                !db.checkIsUploaded(todo) && (
+                  ` (belum upload)`
+                )
+              }
+              {` `}
+              <button onClick={() => this.deleteTodo(todo._id)}>
+                X
+              </button>
+            </p>
+          ))
         }
-      </Form>
-    </Fragment>
-  );
+
+        <h2>add new todo</h2>
+        <form onSubmit={this.addTodo}>
+          <p><input type='text' value={this.state.task_content} onChange={this.type_task_content} /></p>
+          <p><input type='text' value={this.state.tags_input} onChange={this.add_task_tag} /></p>
+          <p>{JSON.stringify(this.state.tags)}</p>
+          <p><button>submit</button></p>
+        </form>
+      </div>
+    );
+  }
+
+  async componentDidMount() {
+    this.unsubTodos = db.subscribe(this.rerender);
+    await db.setName('my_task')
+    await db.initialize();
+    console.log('success init');
+    this.setState({
+      isInitialized: true,
+    });
+  }
+
+  componentWillUnmount() {
+    this.unsubTodos();
+  }
+
+  type_task_content = (event) => {
+    this.setState({
+      task_content: event.target.value,
+    });
+  }
+
+  add_task_tag = (event) => {
+    console.log('event.target.value: ', event.target.value);
+    this.setState({
+      tags_input : event.target.value
+    }, () => {
+      let text = this.state.tags_input
+      if(text[text.length-1] === ',' || text[text.length-1] === ' ' ){
+
+        this.setState({
+          tags : this.state.tags.includes(text.slice(0,text.length-1)) ? this.state.tags : this.state.tags.concat([text.slice(0,text.length-1)]),
+          tags_input : ''
+        })
+      }
+    })
+  }
+
+  addTodo = async (event) => {
+    event.preventDefault();
+    await db.addItem({
+      task_content: this.state.task_content,
+      tags : this.state.tags,
+      created_date : new Date()
+    }, user.data);
+    this.setState({ 
+      task_content: '', 
+      tags : [],
+      tags_input : ''
+    });
+  }
+
+  deleteTodo = async (id) => {
+    db.deleteItem(id, user.data);
+  }
+
+  upload = async () => {
+    console.log('uploading...');
+    try {
+      await db.upload();
+      console.log('upload done');
+    } catch (err) {
+      alert(err.message);
+      console.log('upload failed');
+    }
+  }
+
+  rerender = () => {
+    this.setState({
+      _rerender: new Date(),
+    });
+  }
+
 }
 
-export default connect(mapStateToProps,mapDispatchToProps)(App);
+
+export default App
