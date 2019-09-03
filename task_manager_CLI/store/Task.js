@@ -1,14 +1,12 @@
 const PouchDB = require('pouchdb')
 
-const db = new PouchDB('http://13.250.43.79:5984/my_task', {
-  username: 'admin',
-  password: 'iniadmin'
-})
-
-// db.replicate.to('http://13.250.43.79:5984/', {
+// PouchDB.replicate('my_task','http://13.250.43.79:5984/my_task', {
 //   username: 'admin',
 //   password: 'iniadmin'
 // })
+
+const db = new PouchDB('my_task')
+
 
 module.exports = {
   getAllData : async () => {
@@ -44,6 +42,17 @@ module.exports = {
     } catch (error) {
       
     }
+  },
+  sync : () => {
+    return new Promise ((resolve, reject) => {
+      PouchDB.sync('my_task', 'http://13.250.43.79:5984/my_task')
+      .on('complete', (info) => {
+        resolve(info)
+      })
+      .on('error', (err) => {
+        reject(err)
+      })
+    })
   }
 }
 

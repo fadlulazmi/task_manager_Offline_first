@@ -1,5 +1,5 @@
 const readline = require("readline");
-const { getAllData, complete } = require('./store/Task')
+const { getAllData, complete, sync } = require('./store/Task')
 // const user = require('./store/User')
 
 const rl = readline.createInterface({
@@ -16,7 +16,7 @@ let text_1 = `
     app usage, type one of these option to using this app !
 
      GET (to show all tasks)
-     UPLOAD (to upload all tasks)
+     SYNC (to SYNC all tasks)
      COMPLETE <task_id> (complete the task)
      HELP (show help)
      EXIT (exit from app)
@@ -54,11 +54,19 @@ function mainApp(){
                 console.table(await getAllData());
                 mainApp()
                 break;
-            case "UPLOAD":
+            case "SYNC":
                 flag = true
-                console.log(answer);
-                mainApp()
-                break;
+                try {
+                    console.log("syncronizing...")  
+                    await sync()
+                    console.log("syncronizing success")  
+                    mainApp()
+                    break;
+                } catch (error) {
+                    console.log("sorry you didn't have internet connection")
+                    mainApp()
+                    break;
+                }
             case "COMPLETE":
                 flag = true
                 console.log(await complete(answer[1]));
@@ -68,7 +76,7 @@ function mainApp(){
                 flag = true
                 console.log(`
                     GET (to show all tasks)
-                    UPLOAD (to upload all tasks)
+                    SYNC (to syncronization database)
                     COMPLETE <task_id> (complete the task)
                     HELP (show help)
                     EXIT (exit from app)
